@@ -1,22 +1,20 @@
 '''
-Created on 21 mrt. 2013
-
-@author: j.h. kwakkel
-
 To do: check Mac support and handling of custom directories
 
 '''
+
 from __future__ import unicode_literals, absolute_import
 import os
 import re
 import sys
 
+import logging
+from logging import Handler, DEBUG, INFO
 
 import numpy as np
 import pandas as pd
 import jpype
 
-from logging import debug, info
 
 __all__ = ['NetLogoException',
            'NetLogoLink']
@@ -29,8 +27,10 @@ module_name = {'5':'netlogoLink_v52.NetLogoLink',
 jar_sep ={'win32':';',
           'darwin':':'}
 
-# TODO:: have a function that returns the most up to date netlogo version
-# given a directory
+_logger = None
+LOGGER_NAME = "EMA"
+DEFAULT_LEVEL = DEBUG
+INFO = INFO
 
 def find_netlogo(path):
     '''find the most recent version of netlogo in the specified directory
@@ -70,7 +70,8 @@ def find_jars(path):
             if file.endswith(".jar"):
                 jars.append(os.path.join(root, file))
     return jars
-      
+
+
 def establish_netlogoversion(path):
     # TODO: python3 compliance
     pattern = re.compile(r'(?:(\d+)\.)?(?:(\d+)\.)?(\*|\d+)$')
@@ -79,10 +80,10 @@ def establish_netlogoversion(path):
     match = pattern.search(netlogo)
     version = match.group()
     
-    debug('netlogo version is: '+version)
-    
     main_version = version[0]
+
     return main_version
+
 
 def find_netlogo_windows():
     netlogo = None
@@ -107,6 +108,7 @@ def find_netlogo_windows():
     
     return netlogo
 
+
 def find_netlogo_mac():
     paths = ['/Applications', 
              os.path.join(os.getenv('HOME'), 'Applications')]
@@ -121,6 +123,7 @@ def find_netlogo_mac():
         
     return netlogo
 
+
 def find_netlogo_linux():
     raise NotImplementedError
 
@@ -132,10 +135,7 @@ def get_netlogo_home():
     else:
         netlogo_home = find_netlogo_linux()
         
-    debug('NETLOGO_HOME: '+netlogo_home)
-        
     return netlogo_home
-    
     
 
 class NetLogoException(Exception):
@@ -151,21 +151,16 @@ class NetLogoLink():
         '''
         
         Create a link with NetLogo. Underneath, the NetLogo JVM is started
-        through JPype.
+        through Jpype.
         
-        Parameters
-        ----------
-        gui: boolean, optional
-             if true run NetLogo with gui, otherwise run in 
-             headless mode. Defaults to false.
-        thd: boolean, optional
-             if true start NetLogo in 3d mode. Defaults to 
-             false
-        nl_dir: string, optional
-                absolute path of NetLogo directory
-        nl_version: string, optional
-                    NetLogo version under nl_dir (5.2 or 6.0)
-        jvm_home: string, optional
+        
+        :param gui: boolean, if true run NetLogo with gui, otherwise run in 
+                    headless mode. Defaults to false.
+        :param thd: boolean, if true start NetLogo in 3d mode. Defaults to 
+                    false
+        :param nl_dir: string - full path to NetLogo .exe directory, use if
+                    NetLogo is not in the default location
+        :param nl_version: string - NetLogo version under nl_dir (5.2 or 6.0)
         
         '''
         if not netlogo_home:
@@ -173,39 +168,35 @@ class NetLogoLink():
         if not netlogo_version:
             netlogo_version = establish_netlogoversion(netlogo_home)
         if not jvm_home:
-            jvm_home = jpype.getDefaultJVMPath()  
+            jvm_home = jpype.getDefaultJVMPath()
 
         self.netlogo_home = netlogo_home
         self.netlogo_version = netlogo_version
         self.jvm_home = jvm_home
-        
         
         if not jpype.isJVMStarted():
             jars = find_jars(netlogo_home)
             jars.append(os.path.join(PYNETLOGO_HOME, 'java', 'netlogoLink_combined.jar'))     
             joined_jars = jar_sep[sys.platform].join(jars)
             jarpath = '-Djava.class.path={}'.format(joined_jars)
-            
-            jpype.startJVM(jvm_home, jarpath)
-              
-            #Causes problems with 6.0? 
+            try:
+                jpype.startJVM(jvm_home, jarpath)
+            except RuntimeError as e:
+                raise e
+
+            #Causes problems with 6.0?
             #jpype.java.lang.System.setProperty('user.dir', netlogo_home)
 
             if sys.platform=='darwin':
-                jpype.java.lang.System.setProperty("java.awt.headless", "true");            
-            
-            debug("JVM started")
-            
-        
-        link = jpype.JClass(module_name[netlogo_version])
-        debug('NetLogoLink class found')
+                jpype.java.lang.System.setProperty("java.awt.headless", "true");
+    
+        link = jpype.JClass(module_name[self.netlogo_version])
 
         if sys.platform == 'darwin' and gui:
-            info('on mac only Headless mode is supported')
+            #info('on mac only Headless mode is supported')
             gui=False
         
         self.link = link(jpype.java.lang.Boolean(gui),jpype.java.lang.Boolean(thd))
-        debug('NetLogoLink class instantiated')
         
             
     def load_model(self, path):
@@ -220,16 +211,8 @@ class NetLogoLink():
         '''
         try:
             self.link.loadModel(path)
-        except jpype.JException(jpype.java.io.IOException) as ex:
-            raise IOError(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
+        except jpype.JavaException as ex :
             raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-            raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.lang.InterruptedException) as ex:
-            raise NetLogoException(ex.message())
-        else:
-            debug('loaded model successfully')
 
 
     def kill_workspace(self):
@@ -255,11 +238,7 @@ class NetLogoLink():
         
         try:
             self.link.command(netlogo_command)
-        except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
-            raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-            raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.nvm.EngineException) as ex:
+        except jpype.JavaException as ex :
             raise NetLogoException(ex.message())
 
             
@@ -277,12 +256,8 @@ class NetLogoLink():
         try:
             result = self.link.report(netlogo_reporter)
             return self._cast_results(result)
-        except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
+        except jpype.JavaException as ex :
             raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-            raise NetLogoException(ex.message()) 
-        except jpype.JException(jpype.java.lang.Exception) as ex:
-            raise NetLogoException(ex.message()) 
         
         
     def patch_report(self, netlogo_reporter):
@@ -300,34 +275,22 @@ class NetLogoLink():
 
         try:
             extents = self.link.report('(list min-pxcor max-pxcor min-pycor max-pycor)')
-        except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
-            raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-            raise NetLogoException(ex.message()) 
-        except jpype.JException(jpype.java.lang.Exception) as ex:
-            raise NetLogoException(ex.message())
+            extents = self._cast_results(extents).astype(int)
 
-        extents = self._cast_results(extents).astype(int)
-        results_df = pd.DataFrame(index=range(extents[2],extents[3]+1,1),
-                                  columns=range(extents[0],extents[1]+1,1))
-        results_df.sort_index(ascending=False, inplace=True)
-
-        try:
+            results_df = pd.DataFrame(index=range(extents[2],extents[3]+1,1),
+                                      columns=range(extents[0],extents[1]+1,1))
+            results_df.sort_index(ascending=False, inplace=True)
             if self.netlogo_version == '6':
                 resultsvec = self.link.report('map [[?1] -> [{0}] of ?1] sort patches'.format(netlogo_reporter))
             else:
                 resultsvec = self.link.report('map [[{0}] of ?] sort patches'.format(netlogo_reporter))
-        except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
+            resultsvec = self._cast_results(resultsvec)
+            results_df.ix[:,:] = resultsvec.reshape(results_df.shape)
+            
+            return results_df
+            
+        except jpype.JavaException as ex :
             raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-            raise NetLogoException(ex.message()) 
-        except jpype.JException(jpype.java.lang.Exception) as ex:
-            raise NetLogoException(ex.message())
-        
-        resultsvec = self._cast_results(resultsvec)
-        results_df.ix[:,:] = resultsvec.reshape(results_df.shape)
-        
-        return results_df
             
     
     def patch_set(self, attribute, data):
@@ -336,7 +299,8 @@ class NetLogoLink():
         Set patch attributes from a Pandas dataframe
         
         :param attribute: valid NetLogo patch attribute
-        :param data: Pandas dataframe with same dimensions as NetLogo world
+        :param data: Pandas dataframe with same dimensions as NetLogo world, containing
+                     values to be set
         :raises: NetLogoException
         
         '''
@@ -354,11 +318,7 @@ class NetLogoLink():
 
             self.link.command(command)
             
-        except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
-            raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-            raise NetLogoException(ex.message()) 
-        except jpype.JException(jpype.java.lang.Exception) as ex:
+        except jpype.JavaException as ex :
             raise NetLogoException(ex.message())
         
         
@@ -367,21 +327,16 @@ class NetLogoLink():
         
         Execute the supplied command in NetLogo a given number of times
         
-        :param netlogo_command: a string with a valid NetLogo command
-        :param reps: number of times to repeat commands
-        :raises: NetLogoException in case of either a LogoException or 
-                CompilerException being raised by NetLogo.
+        :param netlogo_command: string with a valid NetLogo command
+        :param reps: int, number of times to repeat commands
+        :raises: NetLogoException
         
         '''
     
         try:
             commandstr = 'repeat {0} [{1}]'.format(reps, netlogo_command)
             self.link.command(commandstr)
-        except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
-            raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-            raise NetLogoException(ex.message())
-        except jpype.JException(jpype.java.org.nlogo.nvm.EngineException) as ex:
+        except jpype.JavaException as ex :
             raise NetLogoException(ex.message())
         
 
@@ -392,7 +347,7 @@ class NetLogoLink():
         over a number of ticks.
         
         :param netlogo_reporter: valid NetLogo reporters (string or list of strings)
-        :param reps: number of ticks for which to return values
+        :param reps: int, number of ticks for which to return values
         :raises: NetLogoException
         :returns: Dataframe of reported values indexed by ticks, with columns 
          for each reporter.
@@ -409,21 +364,77 @@ class NetLogoLink():
         results_df = pd.DataFrame(columns=cols)
         
         for _ in range(reps):    
+            tick = self._cast_results(self.link.report('ticks'))
             for reporter in results_df.columns:
                 try:
-                    tick = self._cast_results(self.link.report('ticks'))
                     result = self.link.report(reporter)
                     results_df.loc[tick, reporter] = self._cast_results(result)
-                except jpype.JException(jpype.java.org.nlogo.api.LogoException) as ex:
+                except jpype.JavaException as ex :
                     raise NetLogoException(ex.message())
-                except jpype.JException(jpype.java.org.nlogo.api.CompilerException) as ex:
-                    raise NetLogoException(ex.message()) 
-                except jpype.JException(jpype.java.lang.Exception) as ex:
-                    raise NetLogoException(ex.message()) 
+
             
             self.link.command('go')
                 
         return results_df
+
+
+    def write_NetLogo_attriblist(netlogo, agent_data, agent_name):
+        '''
+        Update a set of NetLogo agents of the same type with attributes from a Pandas dataframe
+        
+        :param netlogo: NetLogoLink object
+        :param agent_data: Pandas dataframe with a row for each agent, and columns for each attribute to update. 
+                           Requires a 'who' column for the NetLogo agent ID
+        :param agent_name: String for the name of the NetLogo agent type to update (singular, e.g. a-sheep
+                           in the wolf-sheep predation example)
+        :raises: NetLogoException
+        '''
+
+
+        try:
+            #Get list of agent IDs to update, and convert to a Python string to pass to NetLogo
+            whostr = ' '.join(map(str, agent_data['who']))
+
+            #Name of NetLogo agent attributes to update
+            attribs_to_update = [str(i) for i in agent_data.columns if i != 'who']
+
+            #Convert the agent data to Python lists, then to strings to pass to NetLogo
+            attribstr = []
+            for attrib in attribs_to_update:
+                #Check if we have string or numerical data in the dataframe and format the values accordingly
+                if (agent_data[attrib].dtype == object):
+                    values = ' '.join(map(lambda x: '"{0}"'.format(x), list(agent_data[attrib])))
+                else:
+                    values = ' '.join(map(str, list(agent_data[attrib]))) 
+                #Then format the values string to look like a NetLogo list
+                liststr=['[{0}]'.format(values)]
+                attribstr.append(''.join(liststr))
+                
+            #Join the strings for all the attributes
+            attribstr = ' '.join(attribstr)
+
+            #Set up the "foreach" NetLogo command string
+            askstr = []
+            setstr = []
+            for i, attrib_name in enumerate(attribs_to_update):
+                askstr.extend(('?{0} '.format(i+2)))
+                setstr.extend(('set {0} ?{1} '.format(attrib_name, i+2)))
+            askstr = ''.join(askstr)
+            setstr = ''.join(setstr)
+
+            if netlogo.netlogo_version == '6':
+                commandstr = ['(foreach [{0}] {1} [ [?1 {2}] -> ask {3} ?1 [{4}]])'.format(whostr, attribstr, askstr,
+                                                                                           agent_name, setstr)]
+            elif netlogo.netlogo_version == '5':
+                commandstr = ['(foreach [{0}] {1} [ask {2} ?1 [{3}]])'].format(whostr, attribstr, agent_name, setstr)
+                
+            commandstr = ''.join(commandstr)
+            
+            netlogo.command(commandstr)
+            
+        except jpype.JavaException as ex :
+            raise NetLogoException(ex.message())
+
 
 
     def _cast_results(self, results):
