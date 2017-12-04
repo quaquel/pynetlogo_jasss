@@ -84,6 +84,13 @@ def find_jars(path):
         for file in files:  # @ReservedAssignment
             if file.endswith(".jar"):
                 jars.append(os.path.join(root, file))
+
+    try:
+        #Put NetLogo.jar first for 5.x
+        jars.insert(0,jars.pop([i for i, s in enumerate(jars) if 'NetLogo.jar' in s][0]))
+    except:
+        pass
+
     return jars
 
 
@@ -550,7 +557,7 @@ class NetLogoLink(object):
                 commandstr = ['(foreach [{0}] {1} [ [?1 {2}] -> ask {3} ?1 [{4}]])'.format(whostr, attribstr, askstr,
                                                                                            agent_name, setstr)]
             elif self.netlogo_version == '5':
-                commandstr = ['(foreach [{0}] {1} [ask {2} ?1 [{3}]])'].format(whostr, attribstr, agent_name, setstr)
+                commandstr = ['(foreach [{0}] {1} [ask {2} ?1 [{3}]])'.format(whostr, attribstr, agent_name, setstr)]
                 
             commandstr = ''.join(commandstr)
             
