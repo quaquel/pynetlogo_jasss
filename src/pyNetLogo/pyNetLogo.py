@@ -82,14 +82,10 @@ def find_jars(path):
     jars = []
     for root, _, files in os.walk(path):
         for file in files:  # @ReservedAssignment
-            if file.endswith(".jar"):
+            if file=='NetLogo.jar':
+                jars.insert(0,os.path.join(root, file))
+            elif file.endswith(".jar"):
                 jars.append(os.path.join(root, file))
-
-    try:
-        #Put NetLogo.jar first for 5.x
-        jars.insert(0,jars.pop([i for i, s in enumerate(jars) if 'NetLogo.jar' in s][0]))
-    except:
-        pass
 
     return jars
 
