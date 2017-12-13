@@ -410,6 +410,10 @@ class NetLogoLink(object):
         """Return values from a NetLogo reporter over a number of ticks.
 
         Can be used with multiple reporters by passing a list of strings.
+        The values of the returned DataFrame are formatted following the
+        data type returned by the reporters (numerical or string data,
+        with single or multiple values). If the reporter returns multiple
+        values, the results are converted to a numpy array.
         
         Parameters
         ----------
