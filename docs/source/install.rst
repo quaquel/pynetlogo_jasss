@@ -3,8 +3,7 @@ Installation
 
 pyNetLogo requires the numpy, scipy and pandas packages, which are included in most scientific Python distributions. The module has been tested using the Continuum Anaconda 2.7 and 3.6 distributions.
 
-In addition, pyNetLogo depends on `JPype <https://jpype.readthedocs.io/en/latest/>`_. Please
-follow the instructions provided there to install JPype; the conda package manager usually provides the easiest option.
+In addition, pyNetLogo depends on `JPype <https://jpype.readthedocs.io/en/latest/>`_. Please follow the instructions provided there to install JPype; the conda package manager usually provides the easiest option.
 
 pyNetLogo can be installed using the pip package manager, with the following command from a terminal:
 
