@@ -5,9 +5,9 @@ Example 2: Sensitivity analysis for a NetLogo model with SALib and ipyparallel
 This provides a more advanced example of interaction between NetLogo and
 a Python environment, using the SALib library (Herman & Usher, 2017;
 available through the pip package manager) to sample and analyze a
-suitable experimental design for a Sobol global sensitivity analysis.
-Furthermore, the ipyparallel package (also available on pip) is used to
-parallelize the simulations.
+suitable experimental design for a Sobol global sensitivity analysis. Furthermore, the
+ipyparallel package (also available on pip) is used to parallelize the simulations. The
+example is based on the Wolf Sheep Predation model included in NetLogo's model library (Wilensky, 1999).
 
 All files used in the example are available from the pyNetLogo
 repository at https://github.com/quaquel/pyNetLogo.
@@ -31,8 +31,7 @@ repository at https://github.com/quaquel/pyNetLogo.
     sns.set_style('white')
     sns.set_context('talk')
     
-    import jpype
-    import pyNetLogo.pyNetLogo
+    import pyNetLogo
     
     #Import the sampling and analysis modules for a Sobol variance-based 
     #sensitivity analysis
@@ -95,15 +94,15 @@ for each experiment and columns for each input parameter.
 Running the experiments in parallel using ipyparallel
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Ipyparallel is a standalone package (available through the pip package
+ipyparallel is a standalone package (available through the pip package
 manager) which can be used to interactively run parallel tasks from
 IPython on a single PC, but also on multiple computers. On machines with
 multiple cores, this can significantly improve performance: for
 instance, the multiple simulations required for a sensitivity analysis
-are easy to run in parallel. Documentation for Ipyparallel is available
+are easy to run in parallel. Documentation for ipyparallel is available
 at http://ipyparallel.readthedocs.io/en/latest/intro.html.
 
-Ipyparallel first requires starting a controller and multiple engines,
+ipyparallel first requires starting a controller and multiple engines,
 which can be done from a terminal or command prompt with the following:
 
 ``ipcluster start -n 4``
@@ -132,14 +131,7 @@ available engines.
 
 
 We then set up the engines so that they can run the simulations, using a
-“direct view” that accesses all engines.
-
-We first need to change the working directories to import pyNetLogo on
-the engines (assuming the pyNetLogo module is located in the same
-directory as this notebook, rather than being on the Python path). This
-also ensures we have the proper path to the file we need to load. We
-also send the SALib problem definition variable to the workspace of the
-engines, so that it can be used in the simulation.
+“direct view” that accesses all engines. We first need to change the working directories to ensure the engines can find the NetLogo model. We can then also pass the SALib problem definition dictionary to the engines.
 
 Note: there are various solutions to both problems. For example, we
 could make the NetLogo file a keyword argument and pass the absolute
@@ -191,15 +183,13 @@ NetLogo, and load the example model on each of the engines.
     import os
     os.chdir(cwd)
     
-    import jpype
-    import pyNetLogo.pyNetLogo
+    import pyNetLogo
     import pandas as pd
-    import numpy as np
     
-    netlogo = pyNetLogo.pyNetLogo.NetLogoLink(gui=False)
+    netlogo = pyNetLogo.NetLogoLink(gui=False)
     netlogo.load_model(r'Wolf Sheep Predation_v6.nlogo')
 
-We can then use the IPyparallel map functionality to run the sampled
+We can then use the ipyparallel map functionality to run the sampled
 experiments, now using a “load balanced” view to automatically handle
 the scheduling and distribution of the simulations across the engines.
 This is for instance useful when simulations may take different amounts
@@ -355,7 +345,7 @@ parameter, and the seaborn library to plot a linear trend fit.
         x = param_values[:,i]
         sns.regplot(x, y, ax=a, ci=None, color='k',scatter_kws={'alpha':0.2, 's':4, 'color':'gray'})
         pearson = scipy.stats.pearsonr(x, y)
-        a.annotate("r: {:6.3f}".format(pearson[0]), xy=(0.15, 0.85), xycoords='axes fraction',fontsize=13)
+        a.annotate("r: {:6.3f}".format(pearson[0]), xy=(0.15, 0.85), xycoords='axes fraction', fontsize=13)
         if divmod(i,ncol)[1]>0:
             a.get_yaxis().set_visible(False)
         a.set_xlabel(problem['names'][i])
@@ -570,7 +560,7 @@ second-order interactions between inputs estimated from the S2 values.
         # dataframe with s2
         s2 = pd.DataFrame(sobol_indices['S2'], index=problem['names'], 
                           columns=problem['names'])
-        s2[s2<0.0]=0.
+        s2[s2<0.0]=0. #Set negative values to 0 (artifact from small sample sizes)
         s2max = s2.max().max()
         s2min = s2.min().min()
     
@@ -647,9 +637,3 @@ In this case, the “sheep-gain-from-food” variable has strong
 interactions with the “wolf-gain-from-food” and “wolf-reproduce” inputs
 in particular. The size of the ST and S1 circles correspond to the
 normalized variable importances.
-
-Finally, the kill_workspace() function shuts down the NetLogo instance.
-
-.. code:: python3
-
-    netlogo.kill_workspace()
