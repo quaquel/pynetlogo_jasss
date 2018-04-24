@@ -16,12 +16,14 @@ import numpy as np
 import pandas as pd
 import jpype
 
+from jpype import JArray
+
 
 __all__ = ['NetLogoException',
            'NetLogoLink']
 
 PYNETLOGO_HOME = os.path.dirname(os.path.abspath(__file__))
-
+print(PYNETLOGO_HOME)
 # Jar supports NetLogo 5.x or 6.0
 module_name = {'5': 'NetLogoLinkV5.NetLogoLink',
                '6': 'NetLogoLinkV6.NetLogoLink'}
@@ -648,11 +650,11 @@ class NetLogoLink(object):
         """
 
         try:
+            converted_results = type_convert(results)
+        except:
             converted_results=[]
             for i in results:
                 converted_results.append(type_convert(i))
-        except:
-            converted_results = type_convert(results)
 
         return converted_results
 
