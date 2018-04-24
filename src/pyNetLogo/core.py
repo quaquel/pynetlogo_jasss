@@ -212,8 +212,10 @@ class NetLogoLink(object):
 
         if not jpype.isJVMStarted():
             jars = find_jars(netlogo_home)
+            # jars.append(os.path.join(PYNETLOGO_HOME,
+            #                          'java', 'netlogolink.jar'))
             jars.append(os.path.join(PYNETLOGO_HOME,
-                                     'java', 'netlogolink.jar'))
+                                     'java', 'NetLogoLinkRev.jar'))
             joined_jars = jar_sep.join(jars)
             jarpath = '-Djava.class.path={}'.format(joined_jars)
             try:
@@ -222,7 +224,7 @@ class NetLogoLink(object):
                 raise e
 
             # Causes problems with 6.0?
-            # jpype.java.lang.System.setProperty('user.dir', netlogo_home)
+            #jpype.java.lang.System.setProperty('user.dir', netlogo_home)
 
             if sys.platform == 'darwin':
                 jpype.java.lang.System.setProperty('java.awt.headless', 'true')
@@ -307,6 +309,7 @@ class NetLogoLink(object):
             return self._cast_results(result)
         except jpype.JavaException as ex:
             raise NetLogoException(ex.message())
+
 
     def patch_report(self, attribute):
         """Return patch attributes from NetLogo
@@ -601,6 +604,34 @@ class NetLogoLink(object):
         except jpype.JavaException as ex:
             raise NetLogoException(ex.message())
 
+
+    def report_while(self, netlogo_reporter, condition, command='go'):
+        """Return values from a NetLogo reporter while a condition is true
+        in the NetLogo model
+
+        Parameters
+        ----------
+        netlogo_reporter : str
+            Valid NetLogo reporter
+        condition: str
+            Valid boolean NetLogo reporter
+        command: str
+            NetLogo command used to execute the model
+
+        Raises
+        ------
+        NetLogoException
+            If a LogoException or CompilerException is raised by NetLogo
+
+        """
+
+        try:
+            result = self.link.doReportWhile(command,netlogo_reporter,condition)
+            return self._cast_results(result)
+        except jpype.JavaException as ex:
+            raise NetLogoException(ex.message())
+
+
     def _cast_results(self, results):
         """Convert results to the proper python data type. The NLResults
         object knows its datatype and has converter methods for each.
@@ -616,35 +647,47 @@ class NetLogoLink(object):
 
         """
 
-        java_dtype = results.type
+        try:
+            converted_results=[]
+            for i in results:
+                converted_results.append(type_convert(i))
+        except:
+            converted_results = type_convert(results)
 
-        if java_dtype == "Boolean":
-            results = results.getResultAsBoolean()
-            if results == 1:
-                return True
-            else:
-                return False
-        elif java_dtype == "String":
-            return results.getResultAsString()
-        elif java_dtype == "Integer":
-            return results.getResultAsInteger()
-        elif java_dtype == "Double":
-            return results.getResultAsDouble()
-        elif java_dtype == "BoolList":
-            results = results.getResultAsBooleanArray()
+        return converted_results
 
-            tr = []
-            for entry in results:
-                if entry == 1:
-                    tr.append(True)
-                else:
-                    tr.append(False)
-            return tr
-        elif java_dtype == "StringList":
-            return results.getResultAsStringArray()
-        elif java_dtype == "IntegerList":
-            return results.getResultAsIntegerArray()
-        elif java_dtype == "DoubleList":
-            return np.array(results.getResultAsDoubleArray())
+
+def type_convert(results):
+
+    java_dtype = results.type
+
+    if java_dtype == "Boolean":
+        results = results.getResultAsBoolean()
+        if results == 1:
+            return True
         else:
-            raise NetLogoException("Unknown datatype")
+            return False
+    elif java_dtype == "String":
+        return results.getResultAsString()
+    elif java_dtype == "Integer":
+        return results.getResultAsInteger()
+    elif java_dtype == "Double":
+        return results.getResultAsDouble()
+    elif java_dtype == "BoolList":
+        results = results.getResultAsBooleanArray()
+
+        tr = []
+        for entry in results:
+            if entry == 1:
+                tr.append(True)
+            else:
+                tr.append(False)
+        return tr
+    elif java_dtype == "StringList":
+        return results.getResultAsStringArray()
+    elif java_dtype == "IntegerList":
+        return results.getResultAsIntegerArray()
+    elif java_dtype == "DoubleList":
+        return np.array(results.getResultAsDoubleArray())
+    else:
+        raise NetLogoException("Unknown datatype")
