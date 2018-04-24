@@ -16,14 +16,12 @@ import numpy as np
 import pandas as pd
 import jpype
 
-from jpype import JArray
-
 
 __all__ = ['NetLogoException',
            'NetLogoLink']
 
 PYNETLOGO_HOME = os.path.dirname(os.path.abspath(__file__))
-print(PYNETLOGO_HOME)
+
 # Jar supports NetLogo 5.x or 6.0
 module_name = {'5': 'NetLogoLinkV5.NetLogoLink',
                '6': 'NetLogoLinkV6.NetLogoLink'}
@@ -607,7 +605,7 @@ class NetLogoLink(object):
             raise NetLogoException(ex.message())
 
 
-    def report_while(self, netlogo_reporter, condition, command='go'):
+    def report_while(self, netlogo_reporter, condition, command='go', max_seconds=0):
         """Return values from a NetLogo reporter while a condition is true
         in the NetLogo model
 
@@ -619,6 +617,8 @@ class NetLogoLink(object):
             Valid boolean NetLogo reporter
         command: str
             NetLogo command used to execute the model
+        max_seconds: int, optional
+            Time limit used to break execution
 
         Raises
         ------
@@ -628,7 +628,7 @@ class NetLogoLink(object):
         """
 
         try:
-            result = self.link.doReportWhile(command,netlogo_reporter,condition)
+            result = self.link.doReportWhile(command, netlogo_reporter, condition, max_seconds)
             return self._cast_results(result)
         except jpype.JavaException as ex:
             raise NetLogoException(ex.message())
